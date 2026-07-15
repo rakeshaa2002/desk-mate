@@ -1,0 +1,16 @@
+# Python / backend
+backend/venv/
+backend/__pycache__/
+**/__pycache__/
+*.pyc
+.env
+backend/.env
+backend/uploads/
+
+# Node / frontend (frontend has its own .gitignore too)
+node_modules/
+dist/
+
+# OS junk
+.DS_Store
+Thumbs.db
