@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Settings2, Building2, Users, MoreHorizontal, Edit2, Trash2, Eye, Ban, CheckCircle2, Mail, Phone, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,32 +10,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
 import { Badge } from '@/components/ui/badge';
+import { type Tenant, type TenantStatus, tenantService } from '@/services/tenantService';
+import { toast } from 'sonner';
 
 export const Route = createFileRoute('/tenants')({
   component: () => <DashboardLayout><TenantsPage /></DashboardLayout>,
 });
-
-type TenantStatus = 'Active' | 'Suspended';
-
-interface Tenant {
-  id: string;
-  tenantId: string;
-  name: string;
-  plan: string;
-  members: number;
-  status: TenantStatus;
-  contactPerson: string;
-  email: string;
-  mobile: string;
-  workspacesAssigned: number;
-}
-
-const initialTenants: Tenant[] = [
-  { id: '1', tenantId: 'T-01', name: 'Northlabs', plan: 'Enterprise', members: 24, status: 'Active', contactPerson: 'Sarah Jenkins', email: 'contact@northlabs.io', mobile: '+91 9876543210', workspacesAssigned: 8 },
-  { id: '2', tenantId: 'T-02', name: 'Fluxwave', plan: 'Business', members: 12, status: 'Active', contactPerson: 'Alex Menon', email: 'admin@fluxwave.com', mobile: '+91 9123456789', workspacesAssigned: 4 },
-  { id: '3', tenantId: 'T-03', name: 'Orbit', plan: 'Startup', members: 8, status: 'Suspended', contactPerson: 'Kenji Watanabe', email: 'kenji@orbit.co', mobile: '+91 9988776655', workspacesAssigned: 2 },
-  { id: '4', tenantId: 'T-04', name: 'Paperkite', plan: 'Startup', members: 5, status: 'Active', contactPerson: 'Sofia Rossi', email: 'sofia@paperkite.eu', mobile: '+91 9871234567', workspacesAssigned: 2 },
-];
 
 const cardColors = [
   { bg: 'bg-blue-100 dark:bg-blue-900/40', text: 'text-blue-700 dark:text-blue-300' },
@@ -47,64 +27,121 @@ const cardColors = [
 ];
 
 function TenantsPage() {
-  const [tenants, setTenants] = useState<Tenant[]>(initialTenants);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [viewTenant, setViewTenant] = useState<Tenant | null>(null);
   const [editTenant, setEditTenant] = useState<Tenant | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [form, setForm] = useState({
-    name: '', plan: '', contactPerson: '', email: '', mobile: '', status: 'Active' as TenantStatus,
+    name: '', plan: '', contact_person: '', contact_email: '', contact_phone: '', status: 'active' as TenantStatus,
   });
 
-  const handleAdd = () => {
-    if (!form.name || !form.email) return;
-    const idx = tenants.length;
-    const newTenant: Tenant = {
-      id: String(Date.now()),
-      tenantId: `T-0${idx + 1}`,
-      name: form.name,
-      plan: form.plan || 'Startup',
-      members: 0,
-      status: form.status,
-      contactPerson: form.contactPerson,
-      email: form.email,
-      mobile: form.mobile,
-      workspacesAssigned: 0,
-    };
-    setTenants(p => [newTenant, ...p]);
-    setShowAdd(false);
-    setForm({ name: '', plan: '', contactPerson: '', email: '', mobile: '', status: 'Active' });
+  const fetchTenants = async () => {
+    try {
+      const data = await tenantService.getAll();
+      setTenants(data);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to load tenants');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEditSave = () => {
+  useEffect(() => {
+    fetchTenants();
+  }, []);
+
+  const handleAdd = async () => {
+    if (!form.name) return;
+    setIsSubmitting(true);
+    try {
+      const newTenant = await tenantService.create(form);
+      setTenants(p => [newTenant, ...p]);
+      setShowAdd(false);
+      setForm({ name: '', plan: '', contact_person: '', contact_email: '', contact_phone: '', status: 'active' });
+      toast.success('Tenant created successfully');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to create tenant');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEditSave = async () => {
     if (!editTenant) return;
-    setTenants(p => p.map(t => t.id === editTenant.id ? editTenant : t));
-    setEditTenant(null);
+    setIsSubmitting(true);
+    try {
+      const updated = await tenantService.update(editTenant.id, editTenant);
+      setTenants(p => p.map(t => t.id === updated.id ? updated : t));
+      setEditTenant(null);
+      toast.success('Tenant updated successfully');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update tenant');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDelete = (id: string) => setTenants(p => p.filter(t => t.id !== id));
-
-  const toggleStatus = (id: string) => {
-    setTenants(p => p.map(t => t.id === id ? { ...t, status: t.status === 'Active' ? 'Suspended' : 'Active' } : t));
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this tenant?')) return;
+    try {
+      await tenantService.delete(id);
+      setTenants(p => p.filter(t => t.id !== id));
+      toast.success('Tenant deleted');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to delete tenant');
+    }
   };
 
-  const statusBadge = (status: TenantStatus) => (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-      status === 'Active' ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800' : 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800'
-    }`}>
-      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-      {status}
-    </span>
-  );
+  const toggleStatus = async (tenant: Tenant) => {
+    const newStatus = tenant.status === 'active' ? 'suspended' : 'active';
+    try {
+      const updated = await tenantService.update(tenant.id, { status: newStatus });
+      setTenants(p => p.map(t => t.id === tenant.id ? updated : t));
+      toast.success(`Tenant ${newStatus}`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update status');
+    }
+  };
 
-  const tableStatusBadge = (status: TenantStatus) => (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium ${
-      status === 'Active' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
-    }`}>
-      <span className="w-1.5 h-1.5 rounded-full bg-current" />
-      {status}
-    </span>
-  );
+  const statusBadge = (status: string) => {
+    const isActive = status?.toLowerCase() === 'active';
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+        isActive ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-400 dark:border-green-800' : 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800'
+      }`}>
+        <span className="w-1.5 h-1.5 rounded-full bg-current" />
+        {status?.charAt(0).toUpperCase() + status?.slice(1) || 'Unknown'}
+      </span>
+    );
+  };
+
+  const tableStatusBadge = (status: string) => {
+    const isActive = status?.toLowerCase() === 'active';
+    return (
+      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium ${
+        isActive ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'
+      }`}>
+        <span className="w-1.5 h-1.5 rounded-full bg-current" />
+        {status?.charAt(0).toUpperCase() + status?.slice(1) || 'Unknown'}
+      </span>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center">
+        <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -139,7 +176,7 @@ function TenantsPage() {
                 {/* Card Top */}
                 <div className="flex items-start justify-between">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-base font-bold ${color.bg} ${color.text}`}>
-                    {tenant.name.charAt(0)}
+                    {tenant.name.charAt(0).toUpperCase()}
                   </div>
                   {statusBadge(tenant.status)}
                 </div>
@@ -147,14 +184,14 @@ function TenantsPage() {
                 {/* Card Info */}
                 <div>
                   <h3 className="font-semibold text-base">{tenant.name}</h3>
-                  <p className="text-sm text-muted-foreground">{tenant.plan} plan</p>
+                  <p className="text-sm text-muted-foreground">{tenant.plan || 'No'} plan</p>
                 </div>
 
                 {/* Card Footer */}
                 <div className="flex items-center justify-between pt-1 border-t border-border">
                   <span className="text-sm text-muted-foreground flex items-center gap-1.5">
                     <Users className="w-3.5 h-3.5" />
-                    {tenant.members} members
+                    {tenant.members_count || 0} members
                   </span>
                   <Button
                     variant="ghost"
@@ -196,10 +233,10 @@ function TenantsPage() {
                     transition={{ delay: i * 0.04 }}
                     className="border-b last:border-0 hover:bg-muted/20 transition-colors group"
                   >
-                    <td className="px-6 py-3.5 text-muted-foreground font-mono text-xs">{tenant.tenantId}</td>
+                    <td className="px-6 py-3.5 text-muted-foreground font-mono text-xs">T-0{tenant.id}</td>
                     <td className="px-4 py-3.5 font-semibold">{tenant.name}</td>
-                    <td className="px-4 py-3.5 text-muted-foreground">{tenant.plan}</td>
-                    <td className="px-4 py-3.5 text-muted-foreground">{tenant.members}</td>
+                    <td className="px-4 py-3.5 text-muted-foreground">{tenant.plan || '-'}</td>
+                    <td className="px-4 py-3.5 text-muted-foreground">{tenant.members_count || 0}</td>
                     <td className="px-4 py-3.5">{tableStatusBadge(tenant.status)}</td>
                     <td className="px-4 py-3.5">
                       <DropdownMenu>
@@ -215,8 +252,8 @@ function TenantsPage() {
                           <DropdownMenuItem onClick={() => setEditTenant({ ...tenant })} className="gap-2 cursor-pointer">
                             <Edit2 className="w-4 h-4" /> Edit Tenant
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toggleStatus(tenant.id)} className="gap-2 cursor-pointer">
-                            {tenant.status === 'Active'
+                          <DropdownMenuItem onClick={() => toggleStatus(tenant)} className="gap-2 cursor-pointer">
+                            {tenant.status === 'active'
                               ? <><Ban className="w-4 h-4" /> Suspend</>
                               : <><CheckCircle2 className="w-4 h-4" /> Activate</>}
                           </DropdownMenuItem>
@@ -270,34 +307,34 @@ function TenantsPage() {
               <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as TenantStatus }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Suspended">Suspended</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="suspended">Suspended</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5 col-span-2">
               <Label>Contact Person</Label>
-              <Input placeholder="Contact person's name" value={form.contactPerson} onChange={e => setForm(f => ({ ...f, contactPerson: e.target.value }))} />
+              <Input placeholder="Contact person's name" value={form.contact_person} onChange={e => setForm(f => ({ ...f, contact_person: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label>Email *</Label>
+              <Label>Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-9" type="email" placeholder="org@company.com" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+                <Input className="pl-9" type="email" placeholder="org@company.com" value={form.contact_email} onChange={e => setForm(f => ({ ...f, contact_email: e.target.value }))} />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Mobile</Label>
               <div className="relative">
                 <Phone className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-9" placeholder="+91 98765 43210" value={form.mobile} onChange={e => setForm(f => ({ ...f, mobile: e.target.value }))} />
+                <Input className="pl-9" placeholder="+91 98765 43210" value={form.contact_phone} onChange={e => setForm(f => ({ ...f, contact_phone: e.target.value }))} />
               </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
-            <Button onClick={handleAdd} disabled={!form.name || !form.email}>
-              <Plus className="w-4 h-4 mr-2" /> Create Tenant
+            <Button onClick={handleAdd} disabled={!form.name || isSubmitting}>
+              {isSubmitting ? 'Creating...' : <><Plus className="w-4 h-4 mr-2" /> Create Tenant</>}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -312,12 +349,12 @@ function TenantsPage() {
           </DialogHeader>
           {viewTenant && (() => {
             const i = tenants.findIndex(t => t.id === viewTenant.id);
-            const color = cardColors[i % cardColors.length];
+            const color = cardColors[i % cardColors.length] || cardColors[0];
             return (
               <div className="space-y-4">
                 <div className={`flex items-center gap-4 p-4 rounded-xl ${color.bg}`}>
                   <div className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold bg-white/50 dark:bg-black/20 ${color.text}`}>
-                    {viewTenant.name.charAt(0)}
+                    {viewTenant.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <h3 className={`font-bold text-lg ${color.text}`}>{viewTenant.name}</h3>
@@ -327,12 +364,12 @@ function TenantsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   {[
-                    { label: 'Tenant ID', value: viewTenant.tenantId },
-                    { label: 'Members', value: `${viewTenant.members} members` },
-                    { label: 'Contact Person', value: viewTenant.contactPerson },
-                    { label: 'Email', value: viewTenant.email },
-                    { label: 'Mobile', value: viewTenant.mobile },
-                    { label: 'Workspaces', value: `${viewTenant.workspacesAssigned} assigned` },
+                    { label: 'Tenant ID', value: 'T-0' + viewTenant.id },
+                    { label: 'Members', value: `${viewTenant.members_count || 0} members` },
+                    { label: 'Contact Person', value: viewTenant.contact_person },
+                    { label: 'Email', value: viewTenant.contact_email },
+                    { label: 'Mobile', value: viewTenant.contact_phone },
+                    { label: 'Workspaces', value: `${viewTenant.workspaces_assigned || 0} assigned` },
                   ].map(({ label, value }) => (
                     <div key={label} className="space-y-0.5">
                       <p className="text-xs text-muted-foreground">{label}</p>
@@ -347,9 +384,9 @@ function TenantsPage() {
                   <Button
                     variant="outline"
                     className="gap-2"
-                    onClick={() => { toggleStatus(viewTenant.id); setViewTenant(null); }}
+                    onClick={() => { toggleStatus(viewTenant); setViewTenant(null); }}
                   >
-                    {viewTenant.status === 'Active' ? <><Ban className="w-4 h-4" /> Suspend</> : <><CheckCircle2 className="w-4 h-4" /> Activate</>}
+                    {viewTenant.status === 'active' ? <><Ban className="w-4 h-4" /> Suspend</> : <><CheckCircle2 className="w-4 h-4" /> Activate</>}
                   </Button>
                 </div>
               </div>
@@ -375,7 +412,7 @@ function TenantsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Plan</Label>
-                <Select value={editTenant.plan} onValueChange={v => setEditTenant(t => t ? { ...t, plan: v } : t)}>
+                <Select value={editTenant.plan || ''} onValueChange={v => setEditTenant(t => t ? { ...t, plan: v } : t)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {['Startup', 'Business', 'Enterprise'].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
@@ -387,28 +424,30 @@ function TenantsPage() {
                 <Select value={editTenant.status} onValueChange={v => setEditTenant(t => t ? { ...t, status: v as TenantStatus } : t)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Suspended">Suspended</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="suspended">Suspended</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5 col-span-2">
                 <Label>Contact Person</Label>
-                <Input value={editTenant.contactPerson} onChange={e => setEditTenant(t => t ? { ...t, contactPerson: e.target.value } : t)} />
+                <Input value={editTenant.contact_person || ''} onChange={e => setEditTenant(t => t ? { ...t, contact_person: e.target.value } : t)} />
               </div>
               <div className="space-y-1.5">
                 <Label>Email</Label>
-                <Input type="email" value={editTenant.email} onChange={e => setEditTenant(t => t ? { ...t, email: e.target.value } : t)} />
+                <Input type="email" value={editTenant.contact_email || ''} onChange={e => setEditTenant(t => t ? { ...t, contact_email: e.target.value } : t)} />
               </div>
               <div className="space-y-1.5">
                 <Label>Mobile</Label>
-                <Input value={editTenant.mobile} onChange={e => setEditTenant(t => t ? { ...t, mobile: e.target.value } : t)} />
+                <Input value={editTenant.contact_phone || ''} onChange={e => setEditTenant(t => t ? { ...t, contact_phone: e.target.value } : t)} />
               </div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditTenant(null)}>Cancel</Button>
-            <Button onClick={handleEditSave}>Save Changes</Button>
+            <Button onClick={handleEditSave} disabled={isSubmitting}>
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

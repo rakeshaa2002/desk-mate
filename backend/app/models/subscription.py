@@ -13,8 +13,8 @@ class Plan(Base):
     popular = Column(Boolean, default=False)
     color = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.current_timestamp())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.current_timestamp())
 
 
 class Subscription(Base):
@@ -26,8 +26,8 @@ class Subscription(Base):
     amount = Column(Float, nullable=False)
     status = Column(String, default="Active")  # Active, Expired, Pending, Cancelled
     auto_renew = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.current_timestamp())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.current_timestamp())
 
     member = relationship("Member", backref="subscriptions")
     plan = relationship("Plan", backref="subscriptions")

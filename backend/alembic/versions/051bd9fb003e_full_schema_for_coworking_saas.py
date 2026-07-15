@@ -31,7 +31,7 @@ def upgrade() -> None:
     sa.Column('popular', sa.Boolean(), nullable=True),
     sa.Column('color', sa.String(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
@@ -44,7 +44,7 @@ def upgrade() -> None:
     sa.Column('contact_phone', sa.String(), nullable=True),
     sa.Column('plan', sa.String(), nullable=True),
     sa.Column('status', sa.String(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
@@ -54,7 +54,7 @@ def upgrade() -> None:
     op.create_table('audit_log',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('tenant_id', sa.Integer(), nullable=True),
-    sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('timestamp', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('actor', sa.String(), nullable=False),
     sa.Column('action', sa.String(), nullable=False),
     sa.Column('target', sa.String(), nullable=True),
@@ -90,7 +90,7 @@ def upgrade() -> None:
     sa.Column('tenant_id', sa.Integer(), nullable=True),
     sa.Column('name', sa.String(), nullable=False),
     sa.Column('permissions', sa.JSON(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['tenant_id'], ['tenant.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -104,7 +104,7 @@ def upgrade() -> None:
     sa.Column('role', sa.String(), nullable=False),
     sa.Column('status', sa.String(), nullable=True),
     sa.Column('hashed_password', sa.String(), nullable=True),
-    sa.Column('joined_date', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('joined_date', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['tenant_id'], ['tenant.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -122,7 +122,7 @@ def upgrade() -> None:
     sa.Column('floor', sa.String(), nullable=True),
     sa.Column('amenities', sa.JSON(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['tenant_id'], ['tenant.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -147,7 +147,7 @@ def upgrade() -> None:
     sa.Column('role', sa.String(), nullable=True),
     sa.Column('status', sa.String(), nullable=True),
     sa.Column('hashed_password', sa.String(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['tenant_id'], ['tenant.id'], ),
     sa.ForeignKeyConstraint(['workspace_id'], ['workspace.id'], ),
@@ -158,7 +158,7 @@ def upgrade() -> None:
     op.create_table('access_log',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('member_id', sa.Integer(), nullable=True),
-    sa.Column('time', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('time', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('method', sa.String(), nullable=True),
     sa.Column('door', sa.String(), nullable=True),
     sa.Column('member_status', sa.String(), nullable=True),
@@ -175,7 +175,7 @@ def upgrade() -> None:
     sa.Column('check_in', sa.DateTime(timezone=True), nullable=False),
     sa.Column('check_out', sa.DateTime(timezone=True), nullable=True),
     sa.Column('flag', sa.String(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.ForeignKeyConstraint(['member_id'], ['member.id'], ),
     sa.ForeignKeyConstraint(['workspace_id'], ['workspace.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -186,7 +186,7 @@ def upgrade() -> None:
     sa.Column('member_id', sa.Integer(), nullable=False),
     sa.Column('methods', sa.JSON(), nullable=True),
     sa.Column('status', sa.String(), nullable=True),
-    sa.Column('enrolled_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('enrolled_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.ForeignKeyConstraint(['member_id'], ['member.id'], ),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('member_id')
@@ -202,7 +202,7 @@ def upgrade() -> None:
     sa.Column('date', sa.Date(), nullable=False),
     sa.Column('due_date', sa.Date(), nullable=True),
     sa.Column('status', sa.String(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['member_id'], ['member.id'], ),
     sa.PrimaryKeyConstraint('id')
@@ -218,7 +218,7 @@ def upgrade() -> None:
     sa.Column('amount', sa.Float(), nullable=False),
     sa.Column('status', sa.String(), nullable=True),
     sa.Column('auto_renew', sa.Boolean(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['member_id'], ['member.id'], ),
     sa.ForeignKeyConstraint(['plan_id'], ['plan.id'], ),
@@ -239,7 +239,7 @@ def upgrade() -> None:
     sa.Column('pass_code', sa.String(), nullable=True),
     sa.Column('checked_in_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('checked_out_at', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('CURRENT_TIMESTAMP'), nullable=True),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.ForeignKeyConstraint(['host_member_id'], ['member.id'], ),
     sa.PrimaryKeyConstraint('id')

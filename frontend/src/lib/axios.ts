@@ -22,7 +22,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Global error handling, e.g., redirect on 401
+    // Global error handling: redirect to login page on 401/403 (unauthorized/forbidden)
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      localStorage.removeItem('deskmate_auth');
+      localStorage.removeItem('auth_token');
+      window.location.href = '/';
+    }
     return Promise.reject(error);
   }
 );

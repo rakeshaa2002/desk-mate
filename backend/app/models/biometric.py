@@ -8,7 +8,7 @@ class EnrolledMember(Base):
     member_id = Column(Integer, ForeignKey("member.id"), unique=True, nullable=False)
     methods = Column(JSON, default=list)  # ["Fingerprint", "Face"]
     status = Column(String, default="active")
-    enrolled_at = Column(DateTime(timezone=True), server_default=func.now())
+    enrolled_at = Column(DateTime(timezone=True), server_default=func.current_timestamp())
 
     member = relationship("Member", backref="biometric_enrollment", uselist=False)
 
@@ -16,7 +16,7 @@ class EnrolledMember(Base):
 class AccessLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     member_id = Column(Integer, ForeignKey("member.id"), nullable=True)
-    time = Column(DateTime(timezone=True), server_default=func.now())
+    time = Column(DateTime(timezone=True), server_default=func.current_timestamp())
     method = Column(String, nullable=True)  # Fingerprint, Face
     door = Column(String, nullable=True)
     member_status = Column(String, nullable=True)  # Active, Expired, Suspended, Unknown

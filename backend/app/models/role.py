@@ -8,7 +8,7 @@ class Role(Base):
     tenant_id = Column(Integer, ForeignKey("tenant.id"), nullable=True)
     name = Column(String, nullable=False)
     permissions = Column(JSON, default=list)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.current_timestamp())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.current_timestamp())
 
     tenant = relationship("Tenant", backref="roles")

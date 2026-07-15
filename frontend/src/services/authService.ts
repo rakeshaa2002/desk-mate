@@ -90,20 +90,34 @@ class AuthService {
     }
   }
 
-  loginWithBiometric(): Promise<User> {
+  async loginWithBiometric(): Promise<User> {
     // No hardware biometric integration exists yet; this remains a UI simulation.
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const demoUser = Math.random() > 0.5 ? mockUsers[1] : mockUsers[2];
-        if (demoUser.status === "Expired") {
-          reject(new Error("Your membership has expired. Please contact the workspace administrator to renew your subscription."));
-          return;
-        }
-        this.currentUser = demoUser;
-        localStorage.setItem(this.STORAGE_KEY, JSON.stringify(demoUser));
-        resolve(demoUser);
-      }, 1500);
-    });
+    // However, we now log in to the backend for real so that requests have a valid auth token.
+    const useFirstDemoUser = Math.random() > 0.5;
+    const email = useFirstDemoUser ? "sarah@startup.io" : "michael@expired.co";
+
+    try {
+      const form = new URLSearchParams();
+      form.set("username", email);
+      form.set("password", "password123");
+      const { data: token } = await api.post<{ access_token: string }>("/auth/login", form, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
+      localStorage.setItem(this.TOKEN_KEY, token.access_token);
+
+      const { data: member } = await api.get<MemberOut>("/auth/me");
+      const user = toUser(member);
+      this.currentUser = user;
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(user));
+      return user;
+    } catch (err: any) {
+      localStorage.removeItem(this.TOKEN_KEY);
+      const detail = err?.response?.data?.detail;
+      if (email === "michael@expired.co" || detail === "Membership has expired") {
+        throw new Error("Your membership has expired. Please contact the workspace administrator to renew your subscription.");
+      }
+      throw new Error(typeof detail === "string" ? detail : "Biometric authentication failed");
+    }
   }
 
   logout(): void {

@@ -17,7 +17,7 @@ class Visitor(Base):
     pass_code = Column(String, unique=True, index=True, nullable=True)
     checked_in_at = Column(DateTime(timezone=True), nullable=True)
     checked_out_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.current_timestamp())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.current_timestamp())
 
     host = relationship("Member", backref="hosted_visitors")

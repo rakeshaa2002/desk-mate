@@ -21,8 +21,8 @@ class Member(Base):
     role = Column(String, default="member")  # super_admin, org_admin, member
     status = Column(String, default="active")  # active, expired, suspended, pending_approval
     hashed_password = Column(String, nullable=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.current_timestamp())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.current_timestamp())
 
     tenant = relationship("Tenant", backref="members")
     workspace = relationship("Workspace", backref="members")

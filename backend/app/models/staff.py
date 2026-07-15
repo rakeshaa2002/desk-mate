@@ -11,7 +11,7 @@ class Staff(Base):
     role = Column(String, nullable=False)  # Super Admin, Organization Admin, Receptionist, Security, Accounts, Support
     status = Column(String, default="Invited")  # Active, Inactive, Invited
     hashed_password = Column(String, nullable=True)
-    joined_date = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    joined_date = Column(DateTime(timezone=True), server_default=func.current_timestamp())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.current_timestamp())
 
     tenant = relationship("Tenant", backref="staff")
