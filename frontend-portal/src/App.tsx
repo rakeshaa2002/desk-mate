@@ -7,12 +7,14 @@ import { Dashboard } from './pages/Dashboard';
 import { Workspaces } from './pages/Workspaces';
 import { Bookings } from './pages/Bookings';
 import { Biometric } from './pages/Biometric';
+import { EnrollByLink } from './pages/EnrollByLink';
 
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/enroll/:token" element={<EnrollByLink />} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>

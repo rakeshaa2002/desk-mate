@@ -1,9 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import QRCode from 'qrcode';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Fingerprint, ScanFace, ShieldCheck, ShieldX, Cpu, Eye,
-  Plus, Download, RefreshCw, Search, MoreHorizontal, Trash2,
+  Fingerprint, ScanFace, ShieldCheck, ShieldX, Eye,
+  Download, Search, MoreHorizontal, Trash2, Copy,
   CheckCircle2, XCircle, Wifi, WifiOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +16,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
+import { biometricService, type AccessLogDto, type EnrolledMemberDto } from '@/services/biometricService';
+import { memberService } from '@/services/memberService';
 
 export const Route = createFileRoute('/biometric')({
   component: () => <DashboardLayout><BiometricPage /></DashboardLayout>,
@@ -34,6 +39,7 @@ interface AccessLog {
 
 interface EnrolledMember {
   id: string;
+  memberId: number;
   name: string;
   email: string;
   methods: Method[];
@@ -41,25 +47,29 @@ interface EnrolledMember {
   enrolledAt: string;
 }
 
-const initialLogs: AccessLog[] = [
-  { id: 'l1', time: '09:42 AM', user: 'Aarav Sharma', method: 'Fingerprint', door: 'Main Entry', memberStatus: 'Active', result: 'Granted' },
-  { id: 'l2', time: '09:38 AM', user: 'Priya Menon', method: 'Face', door: 'Floor 3', memberStatus: 'Active', result: 'Granted' },
-  { id: 'l3', time: '09:33 AM', user: 'Unknown', method: 'Fingerprint', door: 'Main Entry', memberStatus: 'Unknown', result: 'Failed' },
-  { id: 'l4', time: '09:22 AM', user: 'Kenji Watanabe', method: 'Face', door: 'Main Entry', memberStatus: 'Expired', result: 'Denied — Expired' },
-  { id: 'l5', time: '09:14 AM', user: 'Sofia Rossi', method: 'Fingerprint', door: 'Boardroom', memberStatus: 'Active', result: 'Granted' },
-  { id: 'l6', time: '08:55 AM', user: 'Tom Chen', method: 'Face', door: 'Main Entry', memberStatus: 'Active', result: 'Granted' },
-  { id: 'l7', time: '08:41 AM', user: 'Lina Haddad', method: 'Fingerprint', door: 'Floor 2', memberStatus: 'Suspended', result: 'Denied — Suspended' },
-  { id: 'l8', time: '08:30 AM', user: 'Aisha Patel', method: 'Fingerprint', door: 'Main Entry', memberStatus: 'Active', result: 'Granted' },
-];
+function toAccessLog(dto: AccessLogDto): AccessLog {
+  return {
+    id: String(dto.id),
+    time: new Date(dto.time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+    user: dto.member_name ?? 'Unknown',
+    method: (dto.method as Method) ?? 'Fingerprint',
+    door: dto.door ?? '—',
+    memberStatus: (dto.member_status as MemberStatus) ?? 'Unknown',
+    result: dto.result as AccessResult,
+  };
+}
 
-const initialEnrolled: EnrolledMember[] = [
-  { id: 'e1', name: 'Aarav Sharma', email: 'aarav@northlabs.io', methods: ['Fingerprint', 'Face'], status: 'Active', enrolledAt: '2024-11-02' },
-  { id: 'e2', name: 'Priya Menon', email: 'priya@fluxwave.com', methods: ['Face'], status: 'Active', enrolledAt: '2025-03-14' },
-  { id: 'e3', name: 'Sofia Rossi', email: 'sofia@paperkite.eu', methods: ['Fingerprint'], status: 'Active', enrolledAt: '2025-01-20' },
-  { id: 'e4', name: 'Tom Chen', email: 'tom@nexgen.io', methods: ['Fingerprint', 'Face'], status: 'Active', enrolledAt: '2024-05-12' },
-  { id: 'e5', name: 'Kenji Watanabe', email: 'kenji@orbit.co', methods: ['Face'], status: 'Expired', enrolledAt: '2025-06-01' },
-  { id: 'e6', name: 'Lina Haddad', email: 'lina@vestra.app', methods: ['Fingerprint'], status: 'Suspended', enrolledAt: '2025-09-08' },
-];
+function toEnrolledMember(dto: EnrolledMemberDto): EnrolledMember {
+  return {
+    id: String(dto.id),
+    memberId: dto.member_id,
+    name: dto.member_name ?? `Member #${dto.member_id}`,
+    email: dto.member_email ?? '',
+    methods: dto.methods as Method[],
+    status: (dto.member_status as MemberStatus) ?? 'Active',
+    enrolledAt: dto.enrolled_at.split('T')[0],
+  };
+}
 
 const RESULT_STYLE: Record<AccessResult, string> = {
   'Granted': 'text-green-600 dark:text-green-400',
@@ -81,83 +91,90 @@ function getInitials(name: string) { return name === 'Unknown' ? '?' : name.spli
 const DOORS = ['Main Entry', 'Floor 2', 'Floor 3', 'Boardroom', 'Server Room', 'Cafeteria'];
 
 function BiometricPage() {
-  const [logs, setLogs] = useState<AccessLog[]>(initialLogs);
-  const [enrolled, setEnrolled] = useState<EnrolledMember[]>(initialEnrolled);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [resultFilter, setResultFilter] = useState<'All' | AccessResult>('All');
   const [showEnroll, setShowEnroll] = useState(false);
   const [showSimulate, setShowSimulate] = useState(false);
   const [viewLog, setViewLog] = useState<AccessLog | null>(null);
-  const [enrolling, setEnrolling] = useState(false);
-  const [enrollDone, setEnrollDone] = useState(false);
   const [liveMode, setLiveMode] = useState(true);
-  const liveRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [enrollForm, setEnrollForm] = useState({ name: '', email: '', methods: [] as Method[], status: 'Active' as MemberStatus });
+  const [enrollMemberId, setEnrollMemberId] = useState('');
+  const [enrollLink, setEnrollLink] = useState<{ url: string; qrDataUrl: string } | null>(null);
   const [simForm, setSimForm] = useState({ user: '', method: 'Fingerprint' as Method, door: 'Main Entry' });
 
-  // Live log simulation
-  useEffect(() => {
-    if (!liveMode) { if (liveRef.current) clearInterval(liveRef.current); return; }
-    const users = ['Aarav Sharma', 'Priya Menon', 'Tom Chen', 'Aisha Patel', 'Unknown'];
-    const methods: Method[] = ['Fingerprint', 'Face'];
-    const results: { status: MemberStatus | 'Unknown'; result: AccessResult }[] = [
-      { status: 'Active', result: 'Granted' },
-      { status: 'Active', result: 'Granted' },
-      { status: 'Expired', result: 'Denied — Expired' },
-      { status: 'Unknown', result: 'Failed' },
-    ];
-    liveRef.current = setInterval(() => {
-      const user = users[Math.floor(Math.random() * users.length)];
-      const method = methods[Math.floor(Math.random() * methods.length)];
-      const door = DOORS[Math.floor(Math.random() * DOORS.length)];
-      const { status, result } = results[Math.floor(Math.random() * results.length)];
-      const now = new Date();
-      const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      const newLog: AccessLog = { id: String(Date.now()), time, user, method, door, memberStatus: status, result };
-      setLogs(p => [newLog, ...p.slice(0, 49)]);
-    }, 6000);
-    return () => { if (liveRef.current) clearInterval(liveRef.current); };
-  }, [liveMode]);
+  const { data: logDtos } = useQuery({
+    queryKey: ['biometric', 'logs'],
+    queryFn: biometricService.listLogs,
+    refetchInterval: liveMode ? 5000 : false,
+  });
+  const logs = (logDtos ?? []).map(toAccessLog);
 
-  // Enroll biometric with scan animation
-  const handleEnroll = () => {
-    if (!enrollForm.name || !enrollForm.email || enrollForm.methods.length === 0) return;
-    setEnrolling(true);
-    setTimeout(() => {
-      setEnrolling(false);
-      setEnrollDone(true);
-      setTimeout(() => {
-        const newMember: EnrolledMember = {
-          id: String(Date.now()),
-          name: enrollForm.name,
-          email: enrollForm.email,
-          methods: enrollForm.methods,
-          status: enrollForm.status,
-          enrolledAt: new Date().toISOString().split('T')[0],
-        };
-        setEnrolled(p => [newMember, ...p]);
-        setEnrollDone(false);
-        setShowEnroll(false);
-        setEnrollForm({ name: '', email: '', methods: [], status: 'Active' });
-      }, 1200);
-    }, 2500);
+  const { data: enrolledDtos } = useQuery({
+    queryKey: ['biometric', 'enrolled'],
+    queryFn: biometricService.listEnrolled,
+  });
+  const enrolled = (enrolledDtos ?? []).map(toEnrolledMember);
+
+  const { data: members } = useQuery({ queryKey: ['members'], queryFn: memberService.list });
+
+  const generateLinkMutation = useMutation({
+    mutationFn: biometricService.generateEnrollmentLink,
+    onSuccess: async ({ token }) => {
+      const portalUrl = import.meta.env.VITE_MEMBER_PORTAL_URL || 'http://localhost:5175';
+      const url = `${portalUrl}/enroll/${token}`;
+      const qrDataUrl = await QRCode.toDataURL(url, { width: 220, margin: 1 });
+      setEnrollLink({ url, qrDataUrl });
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Could not generate enrollment link'),
+  });
+  const createLogMutation = useMutation({
+    mutationFn: biometricService.createLog,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['biometric', 'logs'] }),
+    onError: () => toast.error('Failed to log access attempt'),
+  });
+  const deleteLogMutation = useMutation({
+    mutationFn: biometricService.deleteLog,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['biometric', 'logs'] }),
+    onError: () => toast.error('Failed to remove log'),
+  });
+
+  const handleGenerateLink = () => {
+    if (!enrollMemberId) return;
+    generateLinkMutation.mutate(Number(enrollMemberId));
+  };
+
+  const handleCloseEnrollModal = () => {
+    setShowEnroll(false);
+    setEnrollMemberId('');
+    setEnrollLink(null);
+    queryClient.invalidateQueries({ queryKey: ['biometric', 'enrolled'] });
+  };
+
+  const handleCopyLink = () => {
+    if (!enrollLink) return;
+    navigator.clipboard.writeText(enrollLink.url);
+    toast.success('Link copied');
   };
 
   // Simulate access
   const handleSimulate = () => {
     if (!simForm.user) return;
-    const member = enrolled.find(e => e.name === simForm.user);
-    const status: MemberStatus | 'Unknown' = member?.status || 'Unknown';
-    let result: AccessResult = 'Failed';
+    const member = enrolled.find((e) => e.name === simForm.user);
+    const memberStatus: MemberStatus | 'Unknown' = member?.status || 'Unknown';
+    let result: AccessResult;
     if (!member) result = 'Failed';
-    else if (status === 'Expired') result = 'Denied — Expired';
-    else if (status === 'Suspended') result = 'Denied — Suspended';
+    else if (memberStatus === 'Expired') result = 'Denied — Expired';
+    else if (memberStatus === 'Suspended') result = 'Denied — Suspended';
     else result = 'Granted';
-    const now = new Date();
-    const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    const newLog: AccessLog = { id: String(Date.now()), time, user: simForm.user, method: simForm.method, door: simForm.door, memberStatus: status, result };
-    setLogs(p => [newLog, ...p]);
+
+    createLogMutation.mutate({
+      member_id: member ? member.memberId : null,
+      method: simForm.method,
+      door: simForm.door,
+      member_status: memberStatus,
+      result,
+    });
     setShowSimulate(false);
   };
 
@@ -171,22 +188,18 @@ function BiometricPage() {
     URL.revokeObjectURL(url);
   };
 
-  const toggleMethod = (m: Method) => {
-    setEnrollForm(f => ({
-      ...f, methods: f.methods.includes(m) ? f.methods.filter(x => x !== m) : [...f.methods, m]
-    }));
-  };
-
   const filteredLogs = logs.filter(l => {
     const matchSearch = l.user.toLowerCase().includes(search.toLowerCase()) || l.door.toLowerCase().includes(search.toLowerCase());
     const matchResult = resultFilter === 'All' || l.result === resultFilter;
     return matchSearch && matchResult;
   });
 
-  const grantedToday = logs.filter(l => l.result === 'Granted').length;
-  const deniedToday = logs.filter(l => l.result !== 'Granted').length;
-  const fingerprintDevices = 12;
-  const faceDevices = 6;
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todaysLogs = (logDtos ?? []).filter((d) => d.time.split('T')[0] === todayStr);
+  const grantedToday = todaysLogs.filter(d => d.result === 'Granted').length;
+  const deniedToday = todaysLogs.filter(d => d.result !== 'Granted').length;
+  const fingerprintEnrolledCount = enrolled.filter(e => e.methods.includes('Fingerprint')).length;
+  const faceEnrolledCount = enrolled.filter(e => e.methods.includes('Face')).length;
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -194,7 +207,7 @@ function BiometricPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Biometric access control</h1>
-          <p className="text-muted-foreground mt-1">Live logs from fingerprint &amp; face-recognition devices across all doors.</p>
+          <p className="text-muted-foreground mt-1">Live logs from fingerprint &amp; face-recognition check-ins across all doors.</p>
         </div>
         <div className="flex gap-2 shrink-0">
           <Button variant="outline" className="gap-2" onClick={() => setShowSimulate(true)}>
@@ -211,8 +224,8 @@ function BiometricPage() {
         {[
           { label: 'Successful today', value: grantedToday, icon: ShieldCheck, iconClass: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/30' },
           { label: 'Denied today', value: deniedToday, icon: ShieldX, iconClass: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' },
-          { label: 'Fingerprint devices', value: fingerprintDevices, icon: Fingerprint, iconClass: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
-          { label: 'Face devices', value: faceDevices, icon: ScanFace, iconClass: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
+          { label: 'Fingerprint enrolled', value: fingerprintEnrolledCount, icon: Fingerprint, iconClass: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' },
+          { label: 'Face ID enrolled', value: faceEnrolledCount, icon: ScanFace, iconClass: 'text-indigo-500', bg: 'bg-indigo-100 dark:bg-indigo-900/30' },
         ].map((stat, i) => (
           <motion.div key={stat.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
             className="rounded-xl border bg-card p-5 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
@@ -325,7 +338,7 @@ function BiometricPage() {
                             <Eye className="w-4 h-4" /> View Details
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setLogs(p => p.filter(l => l.id !== log.id))} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
+                          <DropdownMenuItem onClick={() => deleteLogMutation.mutate(Number(log.id))} className="gap-2 cursor-pointer text-destructive focus:text-destructive">
                             <Trash2 className="w-4 h-4" /> Remove Log
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -340,82 +353,59 @@ function BiometricPage() {
       </div>
 
       {/* ── Enroll Modal ── */}
-      <Dialog open={showEnroll} onOpenChange={v => { if (!enrolling) { setShowEnroll(v); setEnrollDone(false); } }}>
+      <Dialog open={showEnroll} onOpenChange={v => { if (!v) handleCloseEnrollModal(); else setShowEnroll(true); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Fingerprint className="w-5 h-5 text-primary" /> Enroll Biometric
             </DialogTitle>
-            <DialogDescription>Register a member's fingerprint or face for access control.</DialogDescription>
+            <DialogDescription>
+              Generate a one-time link for a member to enroll their own fingerprint/Face ID on their phone.
+            </DialogDescription>
           </DialogHeader>
 
-          {enrollDone ? (
-            <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex flex-col items-center gap-3 py-8">
-              <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/40 flex items-center justify-center">
-                <CheckCircle2 className="w-9 h-9 text-green-600" />
+          {enrollLink ? (
+            <div className="flex flex-col items-center gap-4 py-4">
+              <img src={enrollLink.qrDataUrl} alt="Enrollment QR code" className="w-48 h-48 rounded-lg border" />
+              <div className="w-full flex items-center gap-2">
+                <Input readOnly value={enrollLink.url} className="text-xs" />
+                <Button variant="outline" size="icon" onClick={handleCopyLink}>
+                  <Copy className="w-4 h-4" />
+                </Button>
               </div>
-              <p className="font-semibold text-lg">Enrollment Complete!</p>
-              <p className="text-sm text-muted-foreground">{enrollForm.name} has been enrolled successfully.</p>
-            </motion.div>
-          ) : enrolling ? (
-            <div className="flex flex-col items-center gap-4 py-8">
-              <motion.div
-                animate={{ scale: [1, 1.1, 1], opacity: [0.7, 1, 0.7] }}
-                transition={{ duration: 1.2, repeat: Infinity }}
-                className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center"
-              >
-                <Fingerprint className="w-10 h-10 text-primary" />
-              </motion.div>
-              <p className="font-medium">Scanning biometric data…</p>
-              <p className="text-sm text-muted-foreground">Please hold still during capture.</p>
+              <p className="text-xs text-muted-foreground text-center">
+                Have the member scan this QR code or open the link on their own phone. It expires in 10 minutes
+                and can only be used once. Their fingerprint/face data never leaves their device.
+              </p>
             </div>
           ) : (
             <div className="space-y-4 py-2">
               <div className="space-y-1.5">
-                <Label>Full Name *</Label>
-                <Input placeholder="e.g. John Doe" value={enrollForm.name} onChange={e => setEnrollForm(f => ({ ...f, name: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Email *</Label>
-                <Input type="email" placeholder="john@company.com" value={enrollForm.email} onChange={e => setEnrollForm(f => ({ ...f, email: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Biometric Methods *</Label>
-                <div className="flex gap-3">
-                  {(['Fingerprint', 'Face'] as Method[]).map(m => (
-                    <button
-                      key={m}
-                      onClick={() => toggleMethod(m)}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 text-sm font-medium transition-all ${enrollForm.methods.includes(m) ? 'border-primary bg-primary/10 text-primary' : 'border-border hover:border-primary/50'}`}
-                    >
-                      {m === 'Fingerprint' ? <Fingerprint className="w-4 h-4" /> : <ScanFace className="w-4 h-4" />}
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Membership Status</Label>
-                <Select value={enrollForm.status} onValueChange={v => setEnrollForm(f => ({ ...f, status: v as MemberStatus }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                <Label>Member *</Label>
+                <Select value={enrollMemberId} onValueChange={setEnrollMemberId}>
+                  <SelectTrigger><SelectValue placeholder="Select a member" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="Expired">Expired</SelectItem>
-                    <SelectItem value="Suspended">Suspended</SelectItem>
+                    {(members ?? []).map(m => (
+                      <SelectItem key={m.id} value={String(m.id)}>{m.first_name} {m.last_name} ({m.email})</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
           )}
 
-          {!enrolling && !enrollDone && (
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowEnroll(false)}>Cancel</Button>
-              <Button onClick={handleEnroll} disabled={!enrollForm.name || !enrollForm.email || enrollForm.methods.length === 0}>
-                <Fingerprint className="w-4 h-4 mr-2" /> Start Enrollment
-              </Button>
-            </DialogFooter>
-          )}
+          <DialogFooter>
+            {enrollLink ? (
+              <Button onClick={handleCloseEnrollModal}>Done</Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={handleCloseEnrollModal}>Cancel</Button>
+                <Button onClick={handleGenerateLink} disabled={!enrollMemberId || generateLinkMutation.isPending}>
+                  <Fingerprint className="w-4 h-4 mr-2" /> {generateLinkMutation.isPending ? 'Generating…' : 'Generate Link'}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
