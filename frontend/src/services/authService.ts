@@ -15,7 +15,7 @@ const STATUS_MAP: Record<string, MembershipStatus> = {
   pending_approval: "Pending Approval",
 };
 
-interface MemberOut {
+export interface MemberOut {
   id: number;
   first_name: string;
   last_name: string;
@@ -31,7 +31,7 @@ interface MemberOut {
   status: string;
 }
 
-function toUser(member: MemberOut): User {
+export function toUser(member: MemberOut): User {
   return {
     id: String(member.id),
     name: `${member.first_name} ${member.last_name}`.trim(),
@@ -66,6 +66,11 @@ class AuthService {
 
   isAuthenticated(): boolean {
     return this.currentUser !== null;
+  }
+
+  setCurrentUser(user: User): void {
+    this.currentUser = user;
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(user));
   }
 
   async loginWithEmail(email: string, password: string): Promise<User> {

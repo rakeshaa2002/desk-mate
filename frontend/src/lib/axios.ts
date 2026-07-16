@@ -23,10 +23,13 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     // Global error handling: redirect to login page on 401/403 (unauthorized/forbidden)
-    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
-      localStorage.removeItem('deskmate_auth');
+    const status = error.response?.status;
+    if (status === 401 || status === 403) {
       localStorage.removeItem('auth_token');
-      window.location.href = '/';
+      localStorage.removeItem('deskmate_auth');
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
     }
     return Promise.reject(error);
   }

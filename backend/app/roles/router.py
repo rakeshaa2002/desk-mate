@@ -10,8 +10,25 @@ from app.schemas.role import RoleCreate, RoleOut, RoleUpdate
 router = APIRouter(dependencies=[Depends(get_current_active_user)])
 crud = CRUDBase[Role, RoleCreate, RoleUpdate](Role)
 
+_DEFAULT_ROLES = [
+    ("Super Admin", ["All modules", "Billing", "Tenants", "Roles"]),
+    ("Organization Admin", ["Members", "Workspaces", "Billing", "Reports"]),
+    ("Receptionist", ["Visitors", "Check-in", "Attendance"]),
+    ("Security", ["Biometric logs", "Access alerts"]),
+    ("Accounts", ["Billing", "Payments", "Invoices"]),
+    ("Support", ["Members read", "Tickets"]),
+    ("Member", ["Own profile", "Own attendance", "Own invoices"]),
+]
+
+def _ensure_seeded(db: Session) -> None:
+    if db.query(Role).count() > 0:
+        return
+    db.add_all(Role(name=name, permissions=permissions) for name, permissions in _DEFAULT_ROLES)
+    db.commit()
+
 @router.get("/", response_model=list[RoleOut])
 def list_roles(db: Session = Depends(get_db)):
+    _ensure_seeded(db)
     return crud.get_multi(db)
 
 @router.get("/{role_id}", response_model=RoleOut)

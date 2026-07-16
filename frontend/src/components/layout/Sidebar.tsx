@@ -39,7 +39,7 @@ export const Sidebar = () => {
   const navigate = useNavigate();
   const user = authService.getCurrentUser();
 
-  const isSettingsActive = ['/settings', '/staff', '/roles'].includes(location.pathname);
+  const isSettingsActive = ['/settings', '/staff', '/roles', '/profile'].includes(location.pathname);
   const [isSettingsOpen, setIsSettingsOpen] = useState(isSettingsActive);
 
   useEffect(() => {
@@ -132,6 +132,7 @@ export const Sidebar = () => {
                 <div className="pl-11 pr-3 py-2 space-y-1 relative before:absolute before:left-[1.35rem] before:top-0 before:bottom-2 before:w-[1px] before:bg-border">
                   {[
                     { label: 'General', path: '/settings' },
+                    { label: 'Profile', path: '/profile' },
                     { label: 'Staff Directory', path: '/staff' },
                     { label: 'Roles & Permissions', path: '/roles' }
                   ].map((subItem) => {
