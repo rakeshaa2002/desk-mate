@@ -23,8 +23,13 @@ class Settings(BaseSettings):
     # CORS
     BACKEND_CORS_ORIGINS: Union[List[str], str] = []
 
-    @validator("BACKEND_CORS_ORIGINS", pre=True)
-    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
+    # WebAuthn (mobile biometric enrollment / check-in)
+    WEBAUTHN_RP_ID: str = "localhost"
+    WEBAUTHN_RP_NAME: str = "DeskMate"
+    WEBAUTHN_ORIGINS: Union[List[str], str] = ["http://localhost:5175"]
+
+    @validator("BACKEND_CORS_ORIGINS", "WEBAUTHN_ORIGINS", pre=True)
+    def assemble_origin_lists(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
         elif isinstance(v, (list, str)):

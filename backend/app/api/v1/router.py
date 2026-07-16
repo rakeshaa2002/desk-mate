@@ -15,6 +15,8 @@ from app.staff.router import router as staff_router
 from app.roles.router import router as roles_router
 from app.audit_logs.router import router as audit_logs_router
 from app.settings.router import router as settings_router
+from app.bookings.router import router as bookings_router
+from app.webauthn.router import router as webauthn_router
 
 api_router = APIRouter()
 
@@ -34,3 +36,5 @@ api_router.include_router(staff_router, prefix="/staff", tags=["Staff"])
 api_router.include_router(roles_router, prefix="/roles", tags=["Roles"])
 api_router.include_router(audit_logs_router, prefix="/audit-logs", tags=["Audit Logs"])
 api_router.include_router(settings_router, prefix="/settings", tags=["Settings"])
+api_router.include_router(bookings_router, prefix="/bookings", tags=["Bookings"])
+api_router.include_router(webauthn_router, prefix="/webauthn", tags=["WebAuthn"])

@@ -22,7 +22,13 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Global error handling, e.g., redirect on 401
+    if (error.response?.status === 401) {
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('deskmate_auth');
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
+    }
     return Promise.reject(error);
   }
 );

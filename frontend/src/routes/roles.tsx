@@ -1,5 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Edit2, Trash2, Shield, MoreHorizontal, Check } from 'lucide-react';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
@@ -8,14 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Switch } from '@/components/ui/switch';
+import { roleService, type RoleDto } from '@/services/roleService';
 
 export const Route = createFileRoute('/roles')({
   component: () => <DashboardLayout><RolesPage /></DashboardLayout>,
 });
 
 const ALL_PERMISSIONS = [
-  'All modules', 'Tenants', 'Workspaces', 'Members', 'Members read', 
+  'All modules', 'Tenants', 'Workspaces', 'Members', 'Members read',
   'Billing', 'Payments', 'Invoices', 'Own invoices',
   'Reports', 'Visitors', 'Check-in', 'Attendance', 'Own attendance',
   'Biometric logs', 'Access alerts', 'Roles', 'Tickets', 'Own profile'
@@ -27,24 +29,45 @@ type Role = {
   permissions: string[];
 };
 
-const INITIAL_ROLES: Role[] = [
-  { id: 'super-admin', name: 'Super Admin', permissions: ['All modules', 'Billing', 'Tenants', 'Roles'] },
-  { id: 'org-admin', name: 'Organization Admin', permissions: ['Members', 'Workspaces', 'Billing', 'Reports'] },
-  { id: 'receptionist', name: 'Receptionist', permissions: ['Visitors', 'Check-in', 'Attendance'] },
-  { id: 'security', name: 'Security', permissions: ['Biometric logs', 'Access alerts'] },
-  { id: 'accounts', name: 'Accounts', permissions: ['Billing', 'Payments', 'Invoices'] },
-  { id: 'support', name: 'Support', permissions: ['Members read', 'Tickets'] },
-  { id: 'member', name: 'Member', permissions: ['Own profile', 'Own attendance', 'Own invoices'] },
-];
+function toRole(dto: RoleDto): Role {
+  return { id: String(dto.id), name: dto.name, permissions: dto.permissions };
+}
 
 function RolesPage() {
-  const [roles, setRoles] = useState<Role[]>(INITIAL_ROLES);
+  const queryClient = useQueryClient();
+  const { data: roleDtos, isLoading } = useQuery({
+    queryKey: ['roles'],
+    queryFn: roleService.list,
+  });
+  const roles = (roleDtos ?? []).map(toRole);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
 
   // Form state
   const [roleName, setRoleName] = useState('');
   const [selectedPerms, setSelectedPerms] = useState<Set<string>>(new Set());
+
+  const invalidateRoles = () => queryClient.invalidateQueries({ queryKey: ['roles'] });
+
+  const createMutation = useMutation({
+    mutationFn: roleService.create,
+    onSuccess: () => { invalidateRoles(); toast.success('Role created'); },
+    onError: () => toast.error('Failed to create role'),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof roleService.update>[1] }) =>
+      roleService.update(id, data),
+    onSuccess: () => { invalidateRoles(); toast.success('Role updated'); },
+    onError: () => toast.error('Failed to update role'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: roleService.remove,
+    onSuccess: () => { invalidateRoles(); toast.success('Role deleted'); },
+    onError: () => toast.error('Failed to delete role'),
+  });
 
   const handleOpenCreate = () => {
     setEditingRole(null);
@@ -61,7 +84,7 @@ function RolesPage() {
   };
 
   const handleDelete = (id: string) => {
-    setRoles(prev => prev.filter(r => r.id !== id));
+    deleteMutation.mutate(Number(id));
   };
 
   const togglePermission = (perm: string) => {
@@ -75,21 +98,14 @@ function RolesPage() {
 
   const handleSave = () => {
     if (!roleName.trim()) return;
-    
+
     if (editingRole) {
-      // Update existing
-      setRoles(prev => prev.map(r => r.id === editingRole.id 
-        ? { ...r, name: roleName, permissions: Array.from(selectedPerms) } 
-        : r
-      ));
+      updateMutation.mutate({
+        id: Number(editingRole.id),
+        data: { name: roleName, permissions: Array.from(selectedPerms) },
+      });
     } else {
-      // Create new
-      const newRole: Role = {
-        id: `role-${Date.now()}`,
-        name: roleName,
-        permissions: Array.from(selectedPerms),
-      };
-      setRoles(prev => [...prev, newRole]);
+      createMutation.mutate({ name: roleName, permissions: Array.from(selectedPerms) });
     }
     setIsModalOpen(false);
   };
@@ -108,6 +124,7 @@ function RolesPage() {
       </div>
 
       {/* Grid */}
+      {isLoading && <p className="text-sm text-muted-foreground">Loading roles…</p>}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <AnimatePresence mode="popLayout">
           {roles.map((role, i) => (
@@ -189,11 +206,12 @@ function RolesPage() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {ALL_PERMISSIONS.map(perm => (
-                  <label 
+                  <label
                     key={perm}
+                    onClick={() => togglePermission(perm)}
                     className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                      selectedPerms.has(perm) 
-                        ? 'bg-primary/5 border-primary/20 dark:bg-primary/10 dark:border-primary/30' 
+                      selectedPerms.has(perm)
+                        ? 'bg-primary/5 border-primary/20 dark:bg-primary/10 dark:border-primary/30'
                         : 'bg-muted/30 hover:bg-muted/60'
                     }`}
                   >
