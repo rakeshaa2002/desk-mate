@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, DoorOpen, Users, Edit2, Trash2, Eye, MoreHorizontal, Wrench, CheckCircle2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { DashboardLayout } from '@/layouts/DashboardLayout';
+import { workspaceService } from '@/services/workspaceService';
 
 export const Route = createFileRoute('/workspaces')({
   component: () => <DashboardLayout><WorkspacesPage /></DashboardLayout>,
@@ -76,7 +77,7 @@ function WorkspaceIcon({ type }: { type: WorkspaceType }) {
 }
 
 function WorkspacesPage() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(initialWorkspaces);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [typeFilter, setTypeFilter] = useState<'All' | WorkspaceType>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | WorkspaceStatus>('All');
   const [showAdd, setShowAdd] = useState(false);
@@ -88,44 +89,94 @@ function WorkspacesPage() {
     capacity: '', price: '', floor: '', amenities: '', tenant: '',
   });
 
+  // Mapper helper functions
+  const mapBackendToFrontend = (ws: any): Workspace => ({
+    id: String(ws.id),
+    name: ws.name,
+    type: ws.type as WorkspaceType,
+    status: ws.status as WorkspaceStatus,
+    capacity: ws.capacity,
+    price: ws.price_per_month,
+    floor: ws.floor || '',
+    amenities: ws.amenities || [],
+  });
+
+  const fetchWorkspaces = async () => {
+    try {
+      const data = await workspaceService.getAll();
+      setWorkspaces(data.map(mapBackendToFrontend));
+    } catch (err) {
+      console.error("Failed to fetch workspaces:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchWorkspaces();
+  }, []);
+
   const filtered = workspaces.filter(w => {
     const matchType = typeFilter === 'All' || w.type === typeFilter;
     const matchStatus = statusFilter === 'All' || w.status === statusFilter;
     return matchType && matchStatus;
   });
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.name || !form.type) return;
-    const newWs: Workspace = {
-      id: String(Date.now()),
+    const payload = {
       name: form.name,
-      type: form.type as WorkspaceType,
+      type: form.type,
       status: form.status,
       capacity: parseInt(form.capacity) || 1,
-      price: parseInt(form.price) || 0,
-      floor: form.floor,
+      price_per_month: parseFloat(form.price) || 0,
+      floor: form.floor || null,
       amenities: form.amenities.split(',').map(s => s.trim()).filter(Boolean),
-      tenant: form.tenant || undefined,
     };
-    setWorkspaces(p => [newWs, ...p]);
-    setShowAdd(false);
-    setForm({ name: '', type: '', status: 'Available', capacity: '', price: '', floor: '', amenities: '', tenant: '' });
+    try {
+      const created = await workspaceService.create(payload);
+      setWorkspaces(p => [mapBackendToFrontend(created), ...p]);
+      setShowAdd(false);
+      setForm({ name: '', type: '', status: 'Available', capacity: '', price: '', floor: '', amenities: '', tenant: '' });
+    } catch (err) {
+      console.error("Failed to create workspace:", err);
+    }
   };
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (!editWs) return;
-    setWorkspaces(p => p.map(w => w.id === editWs.id ? editWs : w));
-    setEditWs(null);
+    const payload = {
+      name: editWs.name,
+      type: editWs.type,
+      status: editWs.status,
+      capacity: editWs.capacity,
+      price_per_month: editWs.price,
+      floor: editWs.floor || null,
+      amenities: editWs.amenities,
+    };
+    try {
+      const updated = await workspaceService.update(parseInt(editWs.id), payload);
+      setWorkspaces(p => p.map(w => w.id === editWs.id ? mapBackendToFrontend(updated) : w));
+      setEditWs(null);
+    } catch (err) {
+      console.error("Failed to update workspace:", err);
+    }
   };
 
-  const handleDelete = (id: string) => setWorkspaces(p => p.filter(w => w.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await workspaceService.delete(parseInt(id));
+      setWorkspaces(p => p.filter(w => w.id !== id));
+    } catch (err) {
+      console.error("Failed to delete workspace:", err);
+    }
+  };
 
-  const cycleStatus = (id: string) => {
-    setWorkspaces(p => p.map(w => {
-      if (w.id !== id) return w;
-      const idx = STATUSES.indexOf(w.status);
-      return { ...w, status: STATUSES[(idx + 1) % STATUSES.length] };
-    }));
+  const cycleStatus = async (id: string) => {
+    try {
+      const updated = await workspaceService.cycleStatus(parseInt(id));
+      setWorkspaces(p => p.map(w => w.id === id ? mapBackendToFrontend(updated) : w));
+    } catch (err) {
+      console.error("Failed to cycle status:", err);
+    }
   };
 
   return (
