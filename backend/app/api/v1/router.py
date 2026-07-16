@@ -17,6 +17,7 @@ from app.audit_logs.router import router as audit_logs_router
 from app.settings.router import router as settings_router
 from app.bookings.router import router as bookings_router
 from app.webauthn.router import router as webauthn_router
+from app.enroll_link.router import router as enroll_link_router
 
 api_router = APIRouter()
 
@@ -38,3 +39,4 @@ api_router.include_router(audit_logs_router, prefix="/audit-logs", tags=["Audit 
 api_router.include_router(settings_router, prefix="/settings", tags=["Settings"])
 api_router.include_router(bookings_router, prefix="/bookings", tags=["Bookings"])
 api_router.include_router(webauthn_router, prefix="/webauthn", tags=["WebAuthn"])
+api_router.include_router(enroll_link_router, prefix="/enroll-link", tags=["Enrollment Links"])

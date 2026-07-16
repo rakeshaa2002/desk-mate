@@ -18,6 +18,9 @@ class EnrolledMemberOut(EnrolledMemberBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     enrolled_at: datetime
+    member_name: Optional[str] = None
+    member_email: Optional[str] = None
+    member_status: Optional[str] = None
 
 
 class AccessLogBase(BaseModel):
@@ -34,3 +37,5 @@ class AccessLogOut(AccessLogBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     time: datetime
+    member_name: Optional[str] = None
+    member_email: Optional[str] = None
